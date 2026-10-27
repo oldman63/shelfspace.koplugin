@@ -43,7 +43,7 @@ return function(screen, th, width)
     -- Rows with an on_tap show a chevron and open the matching tab; the others are plain.
     -- `note` is a muted line under the label; `on_info` adds an info icon that is the only
     -- thing on the row to tap. Every row ends in a slot of the same width so the sizes line up.
-    local function legend(color, label, size_text, on_tap, note, on_info)
+    local function legend(row_width, color, label, size_text, on_tap, note, on_info)
         local dot, gap = sp(14), sp(12)
         local slot = Geom:new{ w = sp(40), h = sp(30) }
         local tail
@@ -64,7 +64,7 @@ return function(screen, th, width)
         if note then
             text_w = VerticalGroup:new{ align = "left", label_w, UI.text(note, 14, { color = th.muted }) }
         end
-        local spacer = width - dot - gap - text_w:getSize().w - size_w:getSize().w - sp(8) - slot.w
+        local spacer = row_width - dot - gap - text_w:getSize().w - size_w:getSize().w - sp(8) - slot.w
         local row = VerticalGroup:new{
             align = "left",
             VerticalSpan:new{ width = sp(10) },
@@ -81,7 +81,7 @@ return function(screen, th, width)
                 tail,
             },
             VerticalSpan:new{ width = sp(10) },
-            LineWidget:new{ dimen = Geom:new{ w = width, h = Size.line.thin }, background = th.line },
+            LineWidget:new{ dimen = Geom:new{ w = row_width, h = Size.line.thin }, background = th.line },
         }
         return on_tap and UI.tappable(row, on_tap) or row
     end
@@ -127,21 +127,32 @@ return function(screen, th, width)
             { fraction = u.available / u.total, color = th.free_space },
         }
     end
+    local landscape = screen.dimen.w > screen.dimen.h
+    local gap = sp(12)
+    local legend_width = landscape and math.floor(width * 0.61) or width
+    local chart_width = landscape and (width - legend_width - gap) or width
     local legend_rows = VerticalGroup:new{ align = "left" }
     for i, r in ipairs(rows) do
-        table.insert(legend_rows, legend(r[1], r[2], r[3], r[4], r[5], r[6]))
+        table.insert(legend_rows, legend(legend_width, r[1], r[2], r[3], r[4], r[5], r[6]))
     end
 
     -- As large as the screen leaves room for once the header, tabs and legend are placed.
     local room = screen.dimen.h - (sp(46) + sp(32) + hero:getSize().h + sp(62) + legend_rows:getSize().h + sp(24))
-    local diameter = math.max(sp(110), math.min(math.floor(width * 0.62), sp(260), room))
+    local diameter
+    if landscape then
+        -- The legend sits beside the chart, so it no longer consumes vertical chart space.
+        local chart_room = screen.dimen.h - (sp(46) + sp(32) + hero:getSize().h + sp(62) + sp(24))
+        diameter = math.max(sp(80), math.min(chart_width - sp(8), sp(220), chart_room))
+    else
+        diameter = math.max(sp(110), math.min(math.floor(width * 0.62), sp(260), room))
+    end
     local used_share = u.total > 0 and u.used / u.total or 0
     local donut = Donut:new{
         diameter = diameter, bg = th.bg, ink = th.ink, slices = slices,
         on_tap = function(slice) if slice.on_tap then slice.on_tap() end end,
     }
     local chart = CenterContainer:new{
-        dimen = Geom:new{ w = width, h = diameter + sp(16) },
+        dimen = Geom:new{ w = chart_width, h = diameter + (landscape and 0 or sp(16)) },
         OverlapGroup:new{
             dimen = Geom:new{ w = diameter, h = diameter },
             donut,
@@ -155,6 +166,11 @@ return function(screen, th, width)
             },
         },
     }
-    local body = VerticalGroup:new{ align = "left", VerticalSpan:new{ width = sp(8) }, chart, legend_rows }
+    local body
+    if landscape then
+        body = HorizontalGroup:new{ align = "center", chart, HorizontalSpan:new{ width = gap }, legend_rows }
+    else
+        body = VerticalGroup:new{ align = "left", VerticalSpan:new{ width = sp(8) }, chart, legend_rows }
+    end
     return { hero = hero, body = body }
 end
